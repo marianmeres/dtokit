@@ -414,7 +414,9 @@ export interface DtoFactory<Schemas, Field extends string> {
  * export type AnyMessage = AnyDto<components['schemas'], 'id'>;
  * ```
  */
-export function createDtoFactory<Schemas>() {
+export function createDtoFactory<Schemas>(): <Field extends string>(
+	discriminatorField: Field
+) => DtoFactory<Schemas, Field> {
 	/**
 	 * @param discriminatorField - The name of the field used as the discriminator
 	 *   (e.g., 'id', 'type', 'kind'). This field must exist on schemas and have
@@ -553,7 +555,10 @@ export type DtoHandlers<Schemas, Field extends string, R> = {
  * };
  * ```
  */
-export function createDtoHandler<Schemas>() {
+export function createDtoHandler<Schemas>(): <Field extends string, R>(
+	discriminatorField: Field,
+	handlers: DtoHandlers<Schemas, Field, R>
+) => (dto: AnyDto<Schemas, Field>) => R {
 	/**
 	 * @typeParam Field - The discriminator field name (inferred from argument)
 	 * @typeParam R - The return type of handlers (inferred from handlers object)
@@ -567,7 +572,7 @@ export function createDtoHandler<Schemas>() {
 	return function <Field extends string, R>(
 		discriminatorField: Field,
 		handlers: DtoHandlers<Schemas, Field, R>
-	) {
+	): (dto: AnyDto<Schemas, Field>) => R {
 		/**
 		 * Handles a DTO by calling the appropriate handler based on its discriminator value.
 		 *
