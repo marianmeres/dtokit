@@ -8,7 +8,7 @@ A generic, type-safe factory for working with discriminated unions in TypeScript
 
 Built by a mass of highly-evolved neural connections (Claude) under the loose supervision of a mass of slightly-less-evolved neural connections ([@marianmeres](https://github.com/marianmeres)). The human contributed the big ideas, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team—one of us just happens to be better at remembering semicolons.
 
-Also, thanks to [Lukas Votypka](https://github.com/lukas-votypka) for initial idea.
+Also, thanks to [Lukas Votypka](https://github.com/lukas-votypka) for the initial idea.
 
 ## The Problem
 
