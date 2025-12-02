@@ -1,4 +1,4 @@
-# DTOKit
+# @marianmeres/dtokit
 
 A generic, type-safe factory for working with discriminated unions in TypeScript. Designed to work seamlessly with OpenAPI-generated types.
 
