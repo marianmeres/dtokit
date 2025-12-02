@@ -23,7 +23,7 @@
  * const dto = messages.parse(rawWebSocketMessage);
  *
  * // Type-safe narrowing
- * if (dto && messages.is(dto, 'subtitle')) {
+ * if (dto && messages.is(dto, 'bar')) {
  *   console.log(dto.data?.text); // fully typed!
  * }
  * ```
@@ -297,8 +297,8 @@ export interface DtoFactory<Schemas, Field extends string> {
 	 * const factory = createDtoFactory<Schemas>()('id');
 	 * const dto = factory.parse(data);
 	 *
-	 * if (dto && factory.is(dto, 'subtitle')) {
-	 *   // TypeScript knows dto is SubtitleMessage here
+	 * if (dto && factory.is(dto, 'bar')) {
+	 *   // TypeScript knows dto is BarMessage here
 	 *   console.log(dto.text); // fully typed access
 	 * }
 	 * ```
@@ -389,8 +389,8 @@ export interface DtoFactory<Schemas, Field extends string> {
  * websocket.onmessage = (event) => {
  *   const dto = messages.parse(JSON.parse(event.data));
  *
- *   if (dto && messages.is(dto, 'subtitle')) {
- *     updateSubtitles(dto.text);
+ *   if (dto && messages.is(dto, 'bar')) {
+ *     handleBar(dto.text);
  *   }
  * };
  * ```
@@ -541,9 +541,9 @@ export type DtoHandlers<Schemas, Field extends string, R> = {
  * @example Logging All Message Types
  * ```typescript
  * const logMessage = createDtoHandler<components['schemas']>()('id', {
- *   listening_start: () => console.log('[WS] Started listening'),
- *   listening_stop: () => console.log('[WS] Stopped listening'),
- *   subtitle: (dto) => console.log('[WS] Subtitle:', dto.text),
+ *   foo: () => console.log('[WS] Foo received'),
+ *   bar: (dto) => console.log('[WS] Bar:', dto.text),
+ *   baz: (dto) => console.log('[WS] Baz:', dto.value),
  *   error: (dto) => console.error('[WS] Error:', dto.message),
  * });
  *

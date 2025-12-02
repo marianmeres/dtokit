@@ -121,8 +121,8 @@ if (dto) {
 
 ### Type Narrowing with Guards
 ```typescript
-if (dto && messages.is(dto, 'subtitle')) {
-  // dto is narrowed to SubtitleMessage type
+if (dto && messages.is(dto, 'bar')) {
+  // dto is narrowed to BarMessage type
   console.log(dto.text);
 }
 ```

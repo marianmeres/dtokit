@@ -8,7 +8,7 @@ A generic, type-safe factory for working with discriminated unions in TypeScript
 
 Built by a mass of highly-evolved neural connections (Claude) under the loose supervision of a mass of slightly-less-evolved neural connections ([@marianmeres](https://github.com/marianmeres)). The human contributed the big ideas, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team—one of us just happens to be better at remembering semicolons.
 
-Also, thanks to [Lukas Votypka](https://github.com/lukas-votypka) for the initial idea.
+Also, thanks to [Lukas Votypka](https://github.com/lukasvotypka) for the initial idea.
 
 ## The Problem
 
@@ -47,8 +47,8 @@ const messages = createDtoFactory<components['schemas']>()('id');
 const dto = messages.parse(rawWebSocketMessage);
 
 // 3. Use type guards for full type safety
-if (dto && messages.is(dto, 'subtitle')) {
-  // dto is fully typed as SubtitleMessage
+if (dto && messages.is(dto, 'bar')) {
+  // dto is fully typed as BarMessage
   console.log(dto.data?.text);
 }
 ```
@@ -62,31 +62,31 @@ Your OpenAPI schemas likely look like this:
 ```yaml
 components:
   schemas:
-    ListeningStartMessage:
+    FooMessage:
       properties:
         id:
           type: string
-          enum: ["listening_start"]  # literal value!
+          enum: ["foo"]  # literal value!
 
-    SubtitleMessage:
+    BarMessage:
       properties:
         id:
           type: string
-          enum: ["subtitle"]  # literal value!
+          enum: ["bar"]  # literal value!
         data:
-          $ref: '#/components/schemas/SubtitleData'
+          $ref: '#/components/schemas/BarData'
 ```
 
 The generated TypeScript types have literal string types:
 
 ```ts
-interface ListeningStartMessage {
-  id: "listening_start";  // literal, not string
+interface FooMessage {
+  id: "foo";  // literal, not string
 }
 
-interface SubtitleMessage {
-  id: "subtitle";  // literal, not string
-  data: SubtitleData | null;
+interface BarMessage {
+  id: "bar";  // literal, not string
+  data: BarData | null;
 }
 ```
 
@@ -101,8 +101,8 @@ The factory uses TypeScript's type system to:
 ```ts
 // The factory automatically discovers:
 // {
-//   "listening_start": ListeningStartMessage,
-//   "subtitle": SubtitleMessage,
+//   "foo": FooMessage,
+//   "bar": BarMessage,
 //   "custom": CustomMessage,
 //   ... all other schemas with literal `id` field
 // }
@@ -151,8 +151,8 @@ const dto = factory.parse(rawData);
 Type guard to narrow a DTO to a specific type.
 
 ```ts
-if (factory.is(dto, 'subtitle')) {
-  // dto: SubtitleMessage
+if (factory.is(dto, 'bar')) {
+  // dto: BarMessage
   dto.data?.text; // fully typed
 }
 ```
@@ -171,7 +171,7 @@ Gets the discriminator value from a DTO.
 
 ```ts
 const id = factory.getId(dto);
-// id: "listening_start" | "subtitle" | "custom" | ...
+// id: "foo" | "bar" | "custom" | ...
 ```
 
 ---
@@ -207,14 +207,14 @@ import { createDtoHandler } from '@marianmeres/dtokit';
 import type { components } from './types';
 
 const handleMessage = createDtoHandler<components['schemas']>()('id', {
-  listening_start: (dto) => {
-    console.log('Started listening');
+  foo: (dto) => {
+    console.log('Foo received');
   },
-  listening_stop: (dto) => {
-    console.log('Stopped listening');
+  bar: (dto) => {
+    console.log('Bar:', dto.data?.text);
   },
-  subtitle: (dto) => {
-    console.log('Subtitle:', dto.data?.text);
+  baz: (dto) => {
+    console.log('Baz:', dto.value);
   },
   // TypeScript ERROR if you miss any message type!
 });
@@ -294,18 +294,18 @@ websocket.onmessage = (event) => {
   }
 
   // Handle specific message types
-  if (messages.is(dto, 'subtitle')) {
-    updateSubtitles(dto.data?.text);
-  } else if (messages.is(dto, 'listening_start')) {
-    showListeningIndicator();
-  } else if (messages.is(dto, 'conversation_done')) {
-    closeConversation();
+  if (messages.is(dto, 'foo')) {
+    handleFoo(dto);
+  } else if (messages.is(dto, 'bar')) {
+    handleBar(dto.data);
+  } else if (messages.is(dto, 'baz')) {
+    handleBaz(dto.value);
   }
 
   // Or use switch for exhaustive handling
   switch (messages.getId(dto)) {
-    case 'subtitle':
-      // TypeScript knows dto could be SubtitleMessage here,
+    case 'foo':
+      // TypeScript knows dto could be FooMessage here,
       // but for full narrowing use messages.is()
       break;
   }
@@ -321,25 +321,25 @@ websocket.onmessage = (event) => {
 
   const messages = createDtoFactory<components['schemas']>()('id');
 
-  let subtitleText = $state('');
-  let isListening = $state(false);
+  let status = $state('idle');
+  let data = $state<string | null>(null);
 
   function handleMessage(raw: unknown) {
     const dto = messages.parse(raw);
     if (!dto) return;
 
-    if (messages.is(dto, 'subtitle')) {
-      subtitleText = dto.data?.text ?? '';
-    } else if (messages.is(dto, 'listening_start')) {
-      isListening = true;
-    } else if (messages.is(dto, 'listening_stop')) {
-      isListening = false;
+    if (messages.is(dto, 'foo')) {
+      status = 'foo_received';
+    } else if (messages.is(dto, 'bar')) {
+      data = dto.data?.text ?? null;
+    } else if (messages.is(dto, 'baz')) {
+      status = 'done';
     }
   }
 </script>
 
-<div class="subtitle" class:listening={isListening}>
-  {subtitleText}
+<div class="status" class:active={status !== 'idle'}>
+  {data}
 </div>
 ```
 

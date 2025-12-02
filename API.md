@@ -61,8 +61,8 @@ const messages = createDtoFactory<components['schemas']>()('id');
 websocket.onmessage = (event) => {
   const dto = messages.parse(JSON.parse(event.data));
 
-  if (dto && messages.is(dto, 'subtitle')) {
-    updateSubtitles(dto.text);
+  if (dto && messages.is(dto, 'bar')) {
+    handleBar(dto.text);
   }
 };
 ```
@@ -112,9 +112,9 @@ import { createDtoHandler } from '@marianmeres/dtokit';
 import type { components } from './api-types';
 
 const handleMessage = createDtoHandler<components['schemas']>()('id', {
-  listening_start: (dto) => console.log('Started listening'),
-  listening_stop: (dto) => console.log('Stopped listening'),
-  subtitle: (dto) => console.log('Subtitle:', dto.text),
+  foo: (dto) => console.log('Foo received'),
+  bar: (dto) => console.log('Bar:', dto.text),
+  baz: (dto) => console.log('Baz:', dto.value),
   error: (dto) => console.error('Error:', dto.message),
   // TypeScript ERROR if any message type is missing!
 });
@@ -236,8 +236,8 @@ Type guard to narrow a DTO to a specific type.
 const factory = createDtoFactory<Schemas>()('id');
 const dto = factory.parse(data);
 
-if (dto && factory.is(dto, 'subtitle')) {
-  // TypeScript knows dto is SubtitleMessage here
+if (dto && factory.is(dto, 'bar')) {
+  // TypeScript knows dto is BarMessage here
   console.log(dto.text); // fully typed access
 }
 ```
