@@ -6,9 +6,11 @@ A generic, type-safe factory for working with discriminated unions in TypeScript
 
 ## 🤖 Full Disclosure 🤖
 
-This package was built by a mass of highly-evolved neural connections (Claude) under the loose supervision of a mass of slightly-less-evolved neural connections ([@marianmeres](https://github.com/marianmeres)). The human contributed the big ideas, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team—one of us just happens to be better at remembering semicolons.
+This package was built with the help of a mass of highly evolved neural connections (the AI) under the loose supervision of a mass of slightly less evolved neural connections (the human -- also known in some circles as [@marianmeres](https://github.com/marianmeres)). 
 
-Thanks to [Lukas Votypka](https://github.com/lukasvotypka) for the initial idea.
+The human contributed the big ideas, the overall design, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team -- one of us just happens to be better at remembering semicolons.
+
+Also, thanks to [Lukas Votypka](https://github.com/lukasvotypka) for the initial idea.
 
 ## The Problem
 
