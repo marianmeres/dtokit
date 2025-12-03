@@ -1,5 +1,8 @@
 # @marianmeres/dtokit
 
+[![NPM Version](https://img.shields.io/npm/v/@marianmeres/dtokit)](https://www.npmjs.com/package/@marianmeres/dtokit)
+[![JSR Version](https://jsr.io/badges/@marianmeres/dtokit)](https://jsr.io/@marianmeres/dtokit)
+
 A generic, type-safe factory for working with discriminated unions in TypeScript. Designed to work seamlessly with OpenAPI-generated types.
 
 **Zero dependencies. Full type safety. Minimal runtime overhead.**

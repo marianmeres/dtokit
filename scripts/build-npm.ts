@@ -1,4 +1,4 @@
-import { npmBuild } from "jsr:@marianmeres/npmbuild";
+import { npmBuild } from "@marianmeres/npmbuild";
 
 const denoJson = JSON.parse(Deno.readTextFileSync("deno.json"));
 
