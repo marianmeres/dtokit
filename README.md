@@ -4,18 +4,18 @@ A generic, type-safe factory for working with discriminated unions in TypeScript
 
 **Zero dependencies. Full type safety. Minimal runtime overhead.**
 
-## Disclaimer
+## 🤖 Full Disclosure 🤖
 
-Built by a mass of highly-evolved neural connections (Claude) under the loose supervision of a mass of slightly-less-evolved neural connections ([@marianmeres](https://github.com/marianmeres)). The human contributed the big ideas, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team—one of us just happens to be better at remembering semicolons.
+This package was built by a mass of highly-evolved neural connections (Claude) under the loose supervision of a mass of slightly-less-evolved neural connections ([@marianmeres](https://github.com/marianmeres)). The human contributed the big ideas, mass caffeine consumption, and a frankly heroic number of "no, not like that" prompts. The AI did the actual typing. We make a great team—one of us just happens to be better at remembering semicolons.
 
-Also, thanks to [Lukas Votypka](https://github.com/lukasvotypka) for the initial idea.
+Thanks to [Lukas Votypka](https://github.com/lukasvotypka) for the initial idea.
 
 ## The Problem
 
 When receiving data through transports like WebSockets, postMessage, or custom protocols, you often need to:
 
 1. Identify what type of message you received
-2. Get full TypeScript type safety for that specific message type
+2. Get full TypeScript type safety for that specific message type`
 3. Do this without runtime validation overhead
 
 If your API uses a discriminator pattern (a field like `id` or `type` with literal string values), this factory automates the type narrowing.
@@ -294,7 +294,7 @@ For detailed documentation of each type, see [API.md](./API.md).
 
 ## FAQ
 
-### Why not use Zod/Valibot for runtime validation?
+### Why not use XYZ library for runtime validation?
 
 This factory is intentionally lightweight. It only checks that the discriminator field exists and is a string—it trusts the shape beyond that. This is appropriate when:
 
