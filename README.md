@@ -19,36 +19,6 @@ When receiving data through transports like WebSockets, postMessage, or custom p
 
 If your API uses a discriminator pattern (a field like `id` or `type` with literal string values), this factory automates the type narrowing.
 
-### Why Not Class Instances?
-
-You might wonder: "Why does `parse()` return plain objects? Couldn't there be a `factory()` method that returns actual class instances with methods?"
-
-Technically yes, but it would defeat the purpose of this library.
-
-The core value of dtokit is **zero boilerplate**:
-
-```
-OpenAPI schema → openapi-typescript → immediate type-safe usage
-```
-
-To support class instances, you'd need to:
-
-1. Manually write a class for each message type
-2. Register each class constructor with the factory
-3. Keep classes in sync with schema changes
-
-At that point, you're just writing:
-
-```ts
-if (raw.id === 'bar') return new BarMessage(raw);
-```
-
-...which requires no library at all. The "factory" would be syntactic sugar over a switch statement you have to maintain anyway.
-
-The only scenario where class instances might add value is with **code generation** that auto-generates classes from the OpenAPI schema. But that's a different tool entirely, and even then, generated classes would likely just be thin wrappers with no real behavior -- so why bother?
-
-**Bottom line:** If you need class instances with methods, you're solving a different problem than what dtokit addresses. This library is for when your generated types are sufficient and you just need type-safe runtime narrowing.
-
 ## Installation
 
 ### Deno (JSR)
@@ -81,6 +51,36 @@ if (dto && messages.is(dto, 'bar')) {
   console.log(dto.data?.text);
 }
 ```
+
+## Why Not Class Instances?
+
+You might wonder: "Why does `parse()` return plain objects? Couldn't there be a `factory()` method that returns actual class instances with methods?"
+
+Technically yes, but it would defeat the purpose of this library.
+
+The core value of dtokit is **zero boilerplate**:
+
+```
+OpenAPI schema → openapi-typescript → immediate type-safe usage
+```
+
+To support class instances, you'd need to:
+
+1. Manually write a class for each message type
+2. Register each class constructor with the factory
+3. Keep classes in sync with schema changes
+
+At that point, you're just writing:
+
+```ts
+if (raw.id === 'bar') return new BarMessage(raw);
+```
+
+...which requires no library at all. The "factory" would be syntactic sugar over a switch statement you have to maintain anyway.
+
+The only scenario where class instances might add value is with **code generation** that auto-generates classes from the OpenAPI schema. But that's a different tool entirely, and even then, generated classes would likely just be thin wrappers with no real behavior -- so why bother?
+
+**Bottom line:** If you need class instances with methods, you're solving a different problem than what dtokit addresses. This library is for when your generated types are sufficient and you just need type-safe runtime narrowing.
 
 ## How It Works
 
