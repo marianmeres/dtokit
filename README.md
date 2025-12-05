@@ -3,7 +3,7 @@
 [![NPM Version](https://img.shields.io/npm/v/@marianmeres/dtokit)](https://www.npmjs.com/package/@marianmeres/dtokit)
 [![JSR Version](https://jsr.io/badges/@marianmeres/dtokit)](https://jsr.io/@marianmeres/dtokit)
 
-A generic, type-safe factory for working with discriminated unions in TypeScript. Designed to work seamlessly with OpenAPI-generated types.
+A generic, type-safe factory for working with discriminated unions in TypeScript.
 
 **Zero dependencies. Full type safety. Minimal runtime overhead.**
 
@@ -37,10 +37,15 @@ npm install @marianmeres/dtokit
 
 ```ts
 import { createDtoFactory } from '@marianmeres/dtokit';
-import type { components } from './types'; // your openapi-typescript generated types
+
+// Your schema: an object where each property is a type with a literal discriminator field
+interface Schemas {
+  FooMessage: { id: 'foo' };
+  BarMessage: { id: 'bar'; data?: { text: string } };
+}
 
 // 1. Create a factory for your schemas, specifying the discriminator field
-const messages = createDtoFactory<components['schemas']>()('id');
+const messages = createDtoFactory<Schemas>()('id');
 
 // 2. Parse incoming data
 const dto = messages.parse(rawWebSocketMessage);
@@ -61,7 +66,7 @@ Technically yes, but it would defeat the purpose of this library.
 The core value of dtokit is **zero boilerplate**:
 
 ```
-OpenAPI schema → openapi-typescript → immediate type-safe usage
+schema types → immediate type-safe usage
 ```
 
 To support class instances, you'd need to:
@@ -78,152 +83,66 @@ if (raw.id === 'bar') return new BarMessage(raw);
 
 ...which requires no library at all. The "factory" would be syntactic sugar over a switch statement you have to maintain anyway.
 
-The only scenario where class instances might add value is with **code generation** that auto-generates classes from the OpenAPI schema. But that's a different tool entirely, and even then, generated classes would likely just be thin wrappers with no real behavior -- so why bother?
-
-**Bottom line:** If you need class instances with methods, you're solving a different problem than what dtokit addresses. This library is for when your generated types are sufficient and you just need type-safe runtime narrowing.
+**Bottom line:** If you need class instances with methods, you're solving a different problem than what dtokit addresses. This library is for when your types are sufficient and you just need type-safe runtime narrowing.
 
 ## How It Works
 
 ### The Discriminator Pattern
 
-Your OpenAPI schemas likely look like this:
+Your schemas must be an object type where each property represents a message type with a **literal string value** for the discriminator field:
+
+```ts
+interface Schemas {
+  FooMessage: { id: 'foo' };                           // literal "foo"
+  BarMessage: { id: 'bar'; data: { text: string } };   // literal "bar"
+}
+```
+
+The factory uses TypeScript's type system to:
+
+1. **Find all types** with a literal value for your discriminator field
+2. **Build a map** from discriminator values to their types
+3. **Provide type guards** that narrow to the exact type
+
+```ts
+// The factory automatically discovers:
+// { "foo": FooMessage, "bar": BarMessage, ... }
+```
+
+### Real-World Example: OpenAPI
+
+A common source of such schemas is [openapi-typescript](https://github.com/openapi-ts/openapi-typescript), which generates TypeScript types from OpenAPI specs:
 
 ```yaml
+# OpenAPI schema
 components:
   schemas:
     FooMessage:
       properties:
         id:
           type: string
-          enum: ["foo"]  # literal value!
-
-    BarMessage:
-      properties:
-        id:
-          type: string
-          enum: ["bar"]  # literal value!
-        data:
-          $ref: '#/components/schemas/BarData'
+          enum: ["foo"]  # becomes literal type!
 ```
 
-The generated TypeScript types have literal string types:
-
 ```ts
-interface FooMessage {
-  id: "foo";  // literal, not string
-}
+// Generated TypeScript
+import type { components } from './generated-types';
 
-interface BarMessage {
-  id: "bar";  // literal, not string
-  data: BarData | null;
-}
-```
-
-### Automatic Type Discovery
-
-The factory uses TypeScript's type system to:
-
-1. **Find all schemas** with a literal value for your discriminator field
-2. **Build a map** from discriminator values to their types
-3. **Provide type guards** that narrow to the exact type
-
-```ts
-// The factory automatically discovers:
-// {
-//   "foo": FooMessage,
-//   "bar": BarMessage,
-//   "custom": CustomMessage,
-//   ... all other schemas with literal `id` field
-// }
+const messages = createDtoFactory<components['schemas']>()('id');
 ```
 
 ## API Reference
 
 For complete API documentation, see [API.md](./API.md).
 
-### Quick Reference
-
-#### `createDtoFactory<Schemas>()(field)`
-
-Creates a factory bound to your schemas and discriminator field.
-
-```ts
-const factory = createDtoFactory<components['schemas']>()('id');
-```
-
-**Parameters:**
-- `Schemas` - Type parameter: your schemas object (e.g., `components['schemas']`)
-- `field` - The discriminator field name (e.g., `'id'`, `'type'`, `'kind'`)
-
-**Returns:** `DtoFactory` instance
-
----
-
-#### `factory.parse(raw)`
-
-Parses unknown data into a typed DTO.
-
-```ts
-const dto = factory.parse(rawData);
-// dto: AnyMessage | null
-```
-
-**Parameters:**
-- `raw` - Unknown data from any source
-
-**Returns:** Typed DTO or `null` if invalid
-
----
-
-#### `factory.is(dto, id)`
-
-Type guard to narrow a DTO to a specific type.
-
-```ts
-if (factory.is(dto, 'bar')) {
-  // dto: BarMessage
-  dto.data?.text; // fully typed
-}
-```
-
-**Parameters:**
-- `dto` - Any valid DTO from this factory
-- `id` - The discriminator value to check (autocompletes!)
-
-**Returns:** Type predicate
-
----
-
-#### `factory.getId(dto)`
-
-Gets the discriminator value from a DTO.
-
-```ts
-const id = factory.getId(dto);
-// id: "foo" | "bar" | "custom" | ...
-```
-
----
-
-#### `factory.isValid(raw)`
-
-Checks if raw data has a valid discriminator field.
-
-```ts
-if (factory.isValid(rawData)) {
-  // rawData has a non-empty string for the discriminator field
-}
-```
-
----
-
-#### `factory.field`
-
-The discriminator field name (readonly).
-
-```ts
-console.log(factory.field); // "id"
-```
+| Method | Description |
+|--------|-------------|
+| `createDtoFactory<Schemas>()(field)` | Creates a factory for your schemas with the given discriminator field |
+| `factory.parse(raw)` | Parses unknown data into a typed DTO (returns `null` if invalid) |
+| `factory.is(dto, id)` | Type guard to narrow a DTO to a specific type |
+| `factory.getId(dto)` | Gets the discriminator value from a DTO |
+| `factory.isValid(raw)` | Checks if raw data has a valid discriminator field |
+| `factory.field` | The discriminator field name (readonly) |
 
 ## Advanced Usage
 
@@ -233,22 +152,13 @@ Use `createDtoHandler` for exhaustive switch-like handling:
 
 ```ts
 import { createDtoHandler } from '@marianmeres/dtokit';
-import type { components } from './types';
 
-const handleMessage = createDtoHandler<components['schemas']>()('id', {
-  foo: (dto) => {
-    console.log('Foo received');
-  },
-  bar: (dto) => {
-    console.log('Bar:', dto.data?.text);
-  },
-  baz: (dto) => {
-    console.log('Baz:', dto.value);
-  },
+const handleMessage = createDtoHandler<Schemas>()('id', {
+  foo: (dto) => console.log('Foo received'),
+  bar: (dto) => console.log('Bar:', dto.data?.text),
   // TypeScript ERROR if you miss any message type!
 });
 
-// Usage
 handleMessage(dto);
 ```
 
@@ -257,26 +167,13 @@ handleMessage(dto);
 Export types for use in other modules:
 
 ```ts
-import {
-  createDtoFactory,
-  DiscriminatorMap,
-  DiscriminatorId,
-  AnyDto
-} from '@marianmeres/dtokit';
-import type { components } from './types';
+import { createDtoFactory, DiscriminatorMap, DiscriminatorId, AnyDto } from '@marianmeres/dtokit';
 
-type Schemas = components['schemas'];
-
-// Create factory
 export const messages = createDtoFactory<Schemas>()('id');
 
-// Export derived types
 export type MessageMap = DiscriminatorMap<Schemas, 'id'>;
 export type MessageId = DiscriminatorId<Schemas, 'id'>;
 export type AnyMessage = AnyDto<Schemas, 'id'>;
-
-// Now other modules can use these types
-// import type { MessageId, AnyMessage } from './messages';
 ```
 
 ### Changing the Discriminator Field
@@ -285,10 +182,10 @@ If you later decide to use `type` instead of `id`:
 
 ```ts
 // Before
-const messages = createDtoFactory<components['schemas']>()('id');
+const messages = createDtoFactory<Schemas>()('id');
 
 // After - just change one string!
-const messages = createDtoFactory<components['schemas']>()('type');
+const messages = createDtoFactory<Schemas>()('type');
 ```
 
 All your existing code continues to work.
@@ -299,10 +196,10 @@ If your API has different discriminator fields for different schema groups:
 
 ```ts
 // WebSocket messages use 'id'
-const wsMessages = createDtoFactory<components['schemas']>()('id');
+const wsMessages = createDtoFactory<WsSchemas>()('id');
 
 // REST responses use 'type'
-const apiResponses = createDtoFactory<components['schemas']>()('type');
+const apiResponses = createDtoFactory<ApiSchemas>()('type');
 ```
 
 
@@ -329,9 +226,9 @@ This factory is intentionally lightweight. It only checks that the discriminator
 
 - Your data comes from a trusted source (your own backend)
 - You want minimal runtime overhead
-- The OpenAPI types are your source of truth
+- Your schema types are your source of truth
 
-If you need full runtime validation, consider using `openapi-zod-client` to generate Zod schemas.
+If you need full runtime validation, consider using Zod or similar libraries.
 
 ### Why the double function call `createDtoFactory<S>()(field)`?
 
@@ -343,8 +240,8 @@ In an ideal world, you'd write:
 
 ```ts
 // HYPOTHETICAL - doesn't work in TypeScript
-const messages = createDtoFactory<components['schemas']>('id');
-//                                 ↑ explicit            ↑ inferred
+const messages = createDtoFactory<Schemas>('id');
+//                                 ↑ explicit  ↑ inferred
 ```
 
 You want to:
@@ -367,12 +264,12 @@ Your options would be:
 
 ```ts
 // Option 1: Specify only Schemas
-createDtoFactory<components['schemas']>('id');
+createDtoFactory<Schemas>('id');
 // ERROR: Expected 2 type arguments, but got 1
 
 // Option 2: Specify both - works but verbose and error-prone
-createDtoFactory<components['schemas'], 'id'>('id');
-//                                      ↑ redundant! must match the string exactly
+createDtoFactory<Schemas, 'id'>('id');
+//                        ↑ redundant! must match the string exactly
 
 // Option 3: Specify neither
 createDtoFactory('id');
@@ -394,9 +291,9 @@ function createDtoFactory<Schemas>() {
 Now TypeScript can handle each step independently:
 
 ```ts
-const messages = createDtoFactory<components['schemas']>()('id');
+const messages = createDtoFactory<Schemas>()('id');
 //               ↑ first call: you specify Schemas explicitly
-//                                                      ↑ second call: Field inferred as literal "id"
+//                                          ↑ second call: Field inferred as literal "id"
 ```
 
 #### Is This Pattern Common?
