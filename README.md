@@ -202,7 +202,7 @@ const wsMessages = createDtoFactory<WsSchemas>()('id');
 const apiResponses = createDtoFactory<ApiSchemas>()('type');
 ```
 
-### Integration with @marianmeres/actor
+### Real World Integration Example
 
 The [@marianmeres/actor](https://github.com/marianmeres/actor) library provides typed actors with compile-time exhaustive message handling powered by dtokit:
 
@@ -218,8 +218,8 @@ type Schemas = {
 const counter = createTypedStateActor<Schemas, number>(0, {
   INC: (_, state) => state + 1,
   DEC: (_, state) => state - 1,
-  ADD: (msg, state) => state + msg.amount,
-  // TypeScript ERROR if you miss any message type!
+  // ADD: (msg, state) => state + msg.amount, // intentionally omitted
+  // TypeScript will error as we missed the ADD message type
 });
 ```
 
