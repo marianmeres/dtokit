@@ -1,0 +1,1 @@
+A generic, type-safe factory for working with discriminated unions in TypeScript. Creates type-narrowing utilities for message/event patterns that use a discriminator field (like `id` or `type`) — zero dependencies, full type safety, minimal runtime overhead.
