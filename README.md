@@ -137,23 +137,25 @@ For complete API documentation, see [API.md](./API.md).
 
 | Method | Description |
 |--------|-------------|
-| `createDtoFactory<Schemas>()(field)` | Creates a factory for your schemas with the given discriminator field |
+| `createDtoFactory<Schemas>()(field, options?)` | Creates a factory for your schemas with the given discriminator field. Optional `{ allowedIds }` enables strict mode. |
 | `factory.parse(raw)` | Parses unknown data into a typed DTO (returns `null` if invalid) |
 | `factory.is(dto, id)` | Type guard to narrow a DTO to a specific type |
 | `factory.getId(dto)` | Gets the discriminator value from a DTO |
 | `factory.isValid(raw)` | Checks if raw data has a valid discriminator field |
+| `factory.handle(handlers, options?)` | Exhaustive switch-style handler bound to this factory (see below) |
 | `factory.field` | The discriminator field name (readonly) |
+| `factory.ids` | Runtime list of allowed discriminator values, or `[]` if strict mode is disabled (readonly) |
 
 ## Advanced Usage
 
 ### Switch-Style Exhaustive Handling
 
-Use `createDtoHandler` for exhaustive switch-like handling:
+Use `factory.handle` (or the standalone `createDtoHandler`) for exhaustive switch-like handling:
 
 ```ts
-import { createDtoHandler } from '@marianmeres/dtokit';
+const messages = createDtoFactory<Schemas>()('id');
 
-const handleMessage = createDtoHandler<Schemas>()('id', {
+const handleMessage = messages.handle({
   foo: (dto) => console.log('Foo received'),
   bar: (dto) => console.log('Bar:', dto.data?.text),
   // TypeScript ERROR if you miss any message type!
@@ -161,6 +163,47 @@ const handleMessage = createDtoHandler<Schemas>()('id', {
 
 handleMessage(dto);
 ```
+
+If the DTO's discriminator value has no matching handler, a descriptive `Error` is thrown. Provide an optional `default` fallback to handle unexpected values gracefully:
+
+```ts
+const handleMessage = messages.handle(
+  {
+    foo: (dto) => /* ... */,
+    bar: (dto) => /* ... */,
+  },
+  {
+    default: (dto) => console.warn('Unknown message:', messages.getId(dto)),
+  }
+);
+```
+
+The standalone form is still available when you don't want to bind to a factory:
+
+```ts
+import { createDtoHandler } from '@marianmeres/dtokit';
+
+const handleMessage = createDtoHandler<Schemas>()('id', {
+  foo: (dto) => /* ... */,
+  bar: (dto) => /* ... */,
+});
+```
+
+### Strict Mode (Runtime Validation of Discriminator Values)
+
+By default, `parse()` only checks that the discriminator field is a non-empty string — it trusts the upstream source. Pass `allowedIds` to enforce that the value is one of the known discriminator values at runtime:
+
+```ts
+const messages = createDtoFactory<Schemas>()('id', {
+  allowedIds: ['foo', 'bar'] as const,
+});
+
+messages.parse({ id: 'foo', data: { text: 'hi' } }); // ok
+messages.parse({ id: 'unexpected' });                // null
+messages.ids;                                        // ["foo", "bar"]
+```
+
+The `allowedIds` list is type-checked against `DiscriminatorId<Schemas, 'id'>`, so it can't drift from the schema. The values are also exposed as the readonly `factory.ids` array for runtime introspection (admin UIs, dropdowns, logging, etc.).
 
 ### Exporting Derived Types
 

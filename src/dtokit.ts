@@ -254,6 +254,24 @@ export interface DtoFactory<Schemas, Field extends string> {
 	readonly field: Field;
 
 	/**
+	 * The runtime list of allowed discriminator values, if provided via
+	 * the `allowedIds` option. Empty array when strict mode is not enabled.
+	 *
+	 * Useful for runtime introspection (admin UIs, dropdowns, logging).
+	 *
+	 * @readonly
+	 *
+	 * @example
+	 * ```typescript
+	 * const factory = createDtoFactory<Schemas>()('id', {
+	 *   allowedIds: ['message_a', 'message_b'] as const,
+	 * });
+	 * console.log(factory.ids); // ["message_a", "message_b"]
+	 * ```
+	 */
+	readonly ids: readonly DiscriminatorId<Schemas, Field>[];
+
+	/**
 	 * Parse raw data into a typed DTO.
 	 *
 	 * Performs minimal validation to check that the discriminator field exists
@@ -311,11 +329,13 @@ export interface DtoFactory<Schemas, Field extends string> {
 	/**
 	 * Get the discriminator value from a DTO.
 	 *
-	 * Extracts the discriminator field value with proper typing as a union
-	 * of all possible discriminator values.
+	 * Extracts the discriminator field value. The return type narrows to the
+	 * specific literal when the input DTO has already been narrowed (e.g.,
+	 * inside an `is()` type guard), and otherwise returns the union of all
+	 * possible discriminator values.
 	 *
 	 * @param dto - Any valid DTO from this factory
-	 * @returns The discriminator value with proper literal union typing
+	 * @returns The discriminator value with proper literal typing
 	 *
 	 * @example
 	 * ```typescript
@@ -326,16 +346,16 @@ export interface DtoFactory<Schemas, Field extends string> {
 	 *   const id = factory.getId(dto);
 	 *   // id: "message_a" | "message_b" | "message_c" | ...
 	 *
-	 *   switch (id) {
-	 *     case 'message_a':
-	 *       // Handle message_a
-	 *       break;
-	 *     // TypeScript knows all possible cases
+	 *   if (factory.is(dto, 'message_a')) {
+	 *     const narrow = factory.getId(dto);
+	 *     // narrow: "message_a"
 	 *   }
 	 * }
 	 * ```
 	 */
-	getId(dto: AnyDto<Schemas, Field>): DiscriminatorId<Schemas, Field>;
+	getId<D extends AnyDto<Schemas, Field>>(
+		dto: D
+	): D extends Record<Field, infer V> ? V & string : never;
 
 	/**
 	 * Check if raw data has a valid discriminator field.
@@ -360,6 +380,39 @@ export interface DtoFactory<Schemas, Field extends string> {
 	 * ```
 	 */
 	isValid(raw: unknown): boolean;
+
+	/**
+	 * Creates an exhaustive switch-style handler bound to this factory.
+	 *
+	 * Equivalent to {@link createDtoHandler} but reuses the factory's
+	 * `Schemas` and `field`. The returned function dispatches a DTO to
+	 * the matching handler by its discriminator value.
+	 *
+	 * If the DTO's discriminator value has no matching handler:
+	 * - If `options.default` is provided, it is called with the DTO.
+	 * - Otherwise, a descriptive error is thrown.
+	 *
+	 * @typeParam R - The return type of all handler functions (must be the same)
+	 * @param handlers - Object mapping each discriminator value to its handler
+	 * @param options - Optional settings (e.g., `default` fallback handler)
+	 * @returns A function that takes a DTO and returns the handler's result
+	 *
+	 * @example
+	 * ```typescript
+	 * const messages = createDtoFactory<Schemas>()('id');
+	 *
+	 * const handle = messages.handle({
+	 *   message_a: (dto) => dto.payload,
+	 *   message_b: (dto) => dto.data.value,
+	 * }, {
+	 *   default: (dto) => `unknown: ${messages.getId(dto)}`,
+	 * });
+	 * ```
+	 */
+	handle<R>(
+		handlers: DtoHandlers<Schemas, Field, R>,
+		options?: { default?: (dto: AnyDto<Schemas, Field>) => R }
+	): (dto: AnyDto<Schemas, Field>) => R;
 }
 
 // ============================================
@@ -415,56 +468,83 @@ export interface DtoFactory<Schemas, Field extends string> {
  * ```
  */
 export function createDtoFactory<Schemas>(): <Field extends string>(
-	discriminatorField: Field
+	discriminatorField: Field,
+	options?: {
+		allowedIds?: readonly DiscriminatorId<Schemas, Field>[];
+	}
 ) => DtoFactory<Schemas, Field> {
 	/**
 	 * @param discriminatorField - The name of the field used as the discriminator
 	 *   (e.g., 'id', 'type', 'kind'). This field must exist on schemas and have
 	 *   a literal string type for those schemas to be included in the factory.
+	 * @param options - Optional settings:
+	 *   - `allowedIds`: enables strict runtime validation. Only values in this
+	 *     list are accepted by `parse()` and `isValid()`. Exposed as `factory.ids`.
 	 * @returns A configured {@link DtoFactory} instance
 	 */
 	return function <Field extends string>(
-		discriminatorField: Field
+		discriminatorField: Field,
+		options?: {
+			allowedIds?: readonly DiscriminatorId<Schemas, Field>[];
+		}
 	): DtoFactory<Schemas, Field> {
 		type Map = DiscriminatorMap<Schemas, Field>;
 		type Id = DiscriminatorId<Schemas, Field>;
 		type Dto = AnyDto<Schemas, Field>;
 
-		return {
+		const allowedIdsList = options?.allowedIds;
+		const allowedIdsSet = allowedIdsList
+			? new Set<string>(allowedIdsList as readonly string[])
+			: null;
+		const ids: readonly Id[] = Object.freeze(
+			allowedIdsList ? ([...allowedIdsList] as Id[]) : ([] as Id[])
+		);
+
+		function isValid(raw: unknown): boolean {
+			if (raw === null || raw === undefined) return false;
+			if (typeof raw !== "object") return false;
+			const value = (raw as Record<string, unknown>)[discriminatorField];
+			if (typeof value !== "string" || value.length === 0) return false;
+			if (allowedIdsSet && !allowedIdsSet.has(value)) return false;
+			return true;
+		}
+
+		function parse(raw: unknown): Dto | null {
+			return isValid(raw) ? (raw as Dto) : null;
+		}
+
+		function is<K extends Id>(dto: Dto, id: K): dto is SafeIndex<Map, K> {
+			return (dto as Record<string, unknown>)[discriminatorField] === id;
+		}
+
+		function getId<D extends Dto>(
+			dto: D
+		): D extends Record<Field, infer V> ? V & string : never {
+			return (dto as unknown as Record<string, unknown>)[
+				discriminatorField
+			] as D extends Record<Field, infer V> ? V & string : never;
+		}
+
+		function handle<R>(
+			handlers: DtoHandlers<Schemas, Field, R>,
+			handleOptions?: { default?: (dto: Dto) => R }
+		): (dto: Dto) => R {
+			return makeDispatcher<Schemas, Field, R>(
+				discriminatorField,
+				handlers,
+				handleOptions?.default
+			);
+		}
+
+		return Object.freeze({
 			field: discriminatorField,
-
-			parse(raw: unknown): Dto | null {
-				if (!this.isValid(raw)) {
-					return null;
-				}
-				return raw as Dto;
-			},
-
-			is<K extends Id>(dto: Dto, id: K): dto is SafeIndex<Map, K> {
-				return (
-					(dto as Record<string, unknown>)[discriminatorField] === id
-				);
-			},
-
-			getId(dto: Dto): Id {
-				return (dto as Record<string, unknown>)[
-					discriminatorField
-				] as Id;
-			},
-
-			isValid(raw: unknown): boolean {
-				if (raw === null || raw === undefined) {
-					return false;
-				}
-				if (typeof raw !== "object") {
-					return false;
-				}
-				const value = (raw as Record<string, unknown>)[
-					discriminatorField
-				];
-				return typeof value === "string" && value.length > 0;
-			},
-		};
+			ids,
+			parse,
+			is,
+			getId,
+			isValid,
+			handle,
+		});
 	};
 }
 
@@ -555,9 +635,38 @@ export type DtoHandlers<Schemas, Field extends string, R> = {
  * };
  * ```
  */
+/**
+ * Shared dispatch logic used by both {@link createDtoHandler} and
+ * {@link DtoFactory.handle}.
+ *
+ * Looks up the handler for the DTO's discriminator value. If no handler
+ * matches, falls back to `defaultHandler` when provided, otherwise throws
+ * a descriptive `Error`.
+ *
+ * @internal
+ */
+function makeDispatcher<Schemas, Field extends string, R>(
+	discriminatorField: Field,
+	handlers: DtoHandlers<Schemas, Field, R>,
+	defaultHandler?: (dto: AnyDto<Schemas, Field>) => R
+): (dto: AnyDto<Schemas, Field>) => R {
+	return function (dto: AnyDto<Schemas, Field>): R {
+		const id = (dto as Record<string, unknown>)[discriminatorField];
+		const handler = (handlers as Record<string, unknown>)[id as string] as
+			| ((d: AnyDto<Schemas, Field>) => R)
+			| undefined;
+		if (handler) return handler(dto);
+		if (defaultHandler) return defaultHandler(dto);
+		throw new Error(
+			`dtokit: no handler for ${discriminatorField}="${String(id)}"`
+		);
+	};
+}
+
 export function createDtoHandler<Schemas>(): <Field extends string, R>(
 	discriminatorField: Field,
-	handlers: DtoHandlers<Schemas, Field, R>
+	handlers: DtoHandlers<Schemas, Field, R>,
+	options?: { default?: (dto: AnyDto<Schemas, Field>) => R }
 ) => (dto: AnyDto<Schemas, Field>) => R {
 	/**
 	 * @typeParam Field - The discriminator field name (inferred from argument)
@@ -566,25 +675,21 @@ export function createDtoHandler<Schemas>(): <Field extends string, R>(
 	 * @param discriminatorField - The name of the discriminator field
 	 * @param handlers - Object mapping each discriminator value to its handler function.
 	 *   All discriminator values must be present - TypeScript will error on missing handlers.
+	 * @param options - Optional settings:
+	 *   - `default`: fallback handler invoked when the DTO's discriminator value
+	 *     has no matching entry in `handlers`. Without it, a descriptive error is thrown.
 	 *
 	 * @returns A function that takes a DTO and calls the appropriate handler
 	 */
 	return function <Field extends string, R>(
 		discriminatorField: Field,
-		handlers: DtoHandlers<Schemas, Field, R>
+		handlers: DtoHandlers<Schemas, Field, R>,
+		options?: { default?: (dto: AnyDto<Schemas, Field>) => R }
 	): (dto: AnyDto<Schemas, Field>) => R {
-		/**
-		 * Handles a DTO by calling the appropriate handler based on its discriminator value.
-		 *
-		 * @param dto - A valid DTO matching the Schemas and Field parameters
-		 * @returns The return value from the matched handler
-		 */
-		return function (dto: AnyDto<Schemas, Field>): R {
-			const id = (dto as Record<string, unknown>)[
-				discriminatorField
-			] as DiscriminatorId<Schemas, Field>;
-			const handler = handlers[id];
-			return handler(dto as never);
-		};
+		return makeDispatcher<Schemas, Field, R>(
+			discriminatorField,
+			handlers,
+			options?.default
+		);
 	};
 }

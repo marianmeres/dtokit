@@ -1,4 +1,9 @@
-import { assertEquals, assertExists, assertStrictEquals } from "@std/assert";
+import {
+	assertEquals,
+	assertExists,
+	assertStrictEquals,
+	assertThrows,
+} from "@std/assert";
 import {
 	createDtoFactory,
 	createDtoHandler,
@@ -535,6 +540,208 @@ Deno.test("simulates WebSocket message handling", () => {
 		"Parse error",
 	]);
 });
+
+// ============================================
+// B1: Destructured / detached method usage
+// ============================================
+
+Deno.test("parse works when destructured (no `this` dependency)", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const { parse, isValid, getId, is } = factory;
+
+	const dto = parse({ id: "message_a", payload: "hi" });
+	assertExists(dto);
+	assertEquals(isValid({ id: "message_a" }), true);
+	assertEquals(getId(dto), "message_a");
+	assertEquals(is(dto, "message_a"), true);
+});
+
+Deno.test("methods work as Array callbacks", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const raw: unknown[] = [
+		{ id: "message_a", payload: "x" },
+		null,
+		{ id: "" },
+		{ id: "message_b", data: { value: 1, nested: false } },
+	];
+
+	const parsed = raw.map(factory.parse).filter((x) => x !== null);
+	assertEquals(parsed.length, 2);
+});
+
+// ============================================
+// B2: Handler unknown-id + default
+// ============================================
+
+Deno.test("createDtoHandler throws descriptive error for unknown discriminator", () => {
+	const handle = createDtoHandler<Schemas>()("id", {
+		message_a: () => "a",
+		message_b: () => "b",
+		message_c: () => "c",
+		dual: () => "d",
+	});
+
+	// Bypass type-checking to simulate unexpected runtime data
+	const bad = { id: "unknown_id" } as unknown as AnyDto<Schemas, "id">;
+
+	assertThrows(() => handle(bad), Error, 'dtokit: no handler for id="unknown_id"');
+});
+
+Deno.test("createDtoHandler calls default handler when provided", () => {
+	const seen: string[] = [];
+	const handle = createDtoHandler<Schemas>()(
+		"id",
+		{
+			message_a: () => "a",
+			message_b: () => "b",
+			message_c: () => "c",
+			dual: () => "d",
+		},
+		{
+			default: (dto) => {
+				seen.push((dto as { id: string }).id);
+				return "default";
+			},
+		}
+	);
+
+	const bad = { id: "unknown_id" } as unknown as AnyDto<Schemas, "id">;
+	assertEquals(handle(bad), "default");
+	assertEquals(seen, ["unknown_id"]);
+});
+
+// ============================================
+// B3 + D1: Strict mode (allowedIds) + factory.ids
+// ============================================
+
+Deno.test("factory.ids is empty when allowedIds not provided", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	assertEquals(factory.ids, []);
+});
+
+Deno.test("factory.ids exposes configured allowed ids", () => {
+	const factory = createDtoFactory<Schemas>()("id", {
+		allowedIds: ["message_a", "message_b"],
+	});
+	assertEquals(factory.ids, ["message_a", "message_b"]);
+});
+
+Deno.test("factory.ids is frozen (not externally mutable)", () => {
+	const factory = createDtoFactory<Schemas>()("id", {
+		allowedIds: ["message_a"],
+	});
+	assertEquals(Object.isFrozen(factory.ids), true);
+});
+
+Deno.test("strict mode: parse rejects unknown discriminator values", () => {
+	const factory = createDtoFactory<Schemas>()("id", {
+		allowedIds: ["message_a", "message_b"],
+	});
+
+	// Allowed
+	assertExists(factory.parse({ id: "message_a", payload: "x" }));
+	assertExists(
+		factory.parse({ id: "message_b", data: { value: 1, nested: false } })
+	);
+
+	// Not in allowedIds — even though non-empty string
+	assertEquals(factory.parse({ id: "message_c", items: [] }), null);
+	assertEquals(factory.parse({ id: "anything_else" }), null);
+});
+
+Deno.test("strict mode: isValid rejects unknown discriminator values", () => {
+	const factory = createDtoFactory<Schemas>()("id", {
+		allowedIds: ["message_a"],
+	});
+
+	assertEquals(factory.isValid({ id: "message_a" }), true);
+	assertEquals(factory.isValid({ id: "message_b" }), false);
+});
+
+Deno.test("non-strict mode still accepts any non-empty string (unchanged behavior)", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	assertExists(factory.parse({ id: "totally_made_up" }));
+});
+
+// ============================================
+// D2: factory.handle method
+// ============================================
+
+Deno.test("factory.handle dispatches like createDtoHandler", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const handle = factory.handle({
+		message_a: (dto) => `a:${dto.payload}`,
+		message_b: (dto) => `b:${dto.data.value}`,
+		message_c: (dto) => `c:${dto.items.length}`,
+		dual: (dto) => `d:${dto.mixed}`,
+	});
+
+	const dtoA = factory.parse({ id: "message_a", payload: "hi" });
+	assertExists(dtoA);
+	assertEquals(handle(dtoA), "a:hi");
+
+	const dtoB = factory.parse({ id: "message_b", data: { value: 7, nested: true } });
+	assertExists(dtoB);
+	assertEquals(handle(dtoB), "b:7");
+});
+
+Deno.test("factory.handle supports default option", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const handle = factory.handle(
+		{
+			message_a: () => "a",
+			message_b: () => "b",
+			message_c: () => "c",
+			dual: () => "d",
+		},
+		{ default: () => "fallback" }
+	);
+
+	const bad = { id: "surprise" } as unknown as AnyDto<Schemas, "id">;
+	assertEquals(handle(bad), "fallback");
+});
+
+Deno.test("factory.handle throws on unknown without default", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const handle = factory.handle({
+		message_a: () => "a",
+		message_b: () => "b",
+		message_c: () => "c",
+		dual: () => "d",
+	});
+
+	const bad = { id: "surprise" } as unknown as AnyDto<Schemas, "id">;
+	assertThrows(() => handle(bad), Error, 'dtokit: no handler for id="surprise"');
+});
+
+// ============================================
+// D3: getId narrows when input is narrowed
+// ============================================
+
+Deno.test("getId return type narrows with input (compile-time check)", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	const dto = factory.parse({ id: "message_a", payload: "hi" });
+	assertExists(dto);
+
+	if (factory.is(dto, "message_a")) {
+		// Must assign to the exact literal — widened type would not compile
+		const id: "message_a" = factory.getId(dto);
+		assertEquals(id, "message_a");
+	}
+});
+
+// ============================================
+// D5: Factory is frozen
+// ============================================
+
+Deno.test("factory is frozen (readonly at runtime)", () => {
+	const factory = createDtoFactory<Schemas>()("id");
+	assertEquals(Object.isFrozen(factory), true);
+});
+
+// ============================================
+// Original tests continue below
+// ============================================
 
 Deno.test("simulates exhaustive handler pattern", () => {
 	const factory = createDtoFactory<Schemas>()("id");
